@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useDeferredValue, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Edit3, Eye, Plus, Trash2 } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal.jsx';
@@ -30,20 +30,22 @@ export function Assets() {
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [retiring, setRetiring] = useState(false);
   const [error, setError] = useState('');
   const { user } = useAuth();
   const { addToast } = useToast();
 
   const canManage = ['Admin', 'Asset Manager'].includes(user?.role);
   const canDelete = user?.role === 'Admin';
+  const deferredSearch = useDeferredValue(filters.search);
 
-  const loadAssets = async () => {
+  const loadAssets = async (requestFilters = filters) => {
     setLoading(true);
     setError('');
 
     try {
       const [assetResult, categoryResult] = await Promise.all([
-        assetService.list(filters),
+        assetService.list(requestFilters),
         categoryService.list()
       ]);
       setAssets(assetResult.data);
@@ -57,8 +59,17 @@ export function Assets() {
   };
 
   useEffect(() => {
-    loadAssets();
-  }, [filters]);
+    loadAssets({ ...filters, search: deferredSearch });
+  }, [
+    deferredSearch,
+    filters.category_id,
+    filters.status,
+    filters.warranty_status,
+    filters.sort_by,
+    filters.sort_direction,
+    filters.page,
+    filters.limit
+  ]);
 
   const confirmDelete = async () => {
     if (!deleteTarget) {
@@ -66,12 +77,15 @@ export function Assets() {
     }
 
     try {
+      setRetiring(true);
       await assetService.remove(deleteTarget.id);
       addToast('Asset retired.');
       setDeleteTarget(null);
       loadAssets();
     } catch (err) {
       addToast(err.message, 'error');
+    } finally {
+      setRetiring(false);
     }
   };
 
@@ -98,17 +112,17 @@ export function Assets() {
       header: '',
       render: (asset) => (
         <div className="row-actions">
-          <Link className="icon-button" aria-label="View asset" to={`/assets/${asset.id}`}>
-            <Eye size={17} />
+          <Link className="icon-button" aria-label={`View ${asset.asset_name}`} title="View asset" to={`/assets/${asset.id}`}>
+            <Eye size={17} aria-hidden="true" />
           </Link>
           {canManage ? (
-            <Link className="icon-button" aria-label="Edit asset" to={`/assets/${asset.id}/edit`}>
-              <Edit3 size={17} />
+            <Link className="icon-button" aria-label={`Edit ${asset.asset_name}`} title="Edit asset" to={`/assets/${asset.id}/edit`}>
+              <Edit3 size={17} aria-hidden="true" />
             </Link>
           ) : null}
           {canDelete ? (
-            <button className="icon-button danger" type="button" aria-label="Retire asset" onClick={() => setDeleteTarget(asset)}>
-              <Trash2 size={17} />
+            <button className="icon-button danger" type="button" aria-label={`Retire ${asset.asset_name}`} title="Retire asset" onClick={() => setDeleteTarget(asset)}>
+              <Trash2 size={17} aria-hidden="true" />
             </button>
           ) : null}
         </div>
@@ -120,16 +134,18 @@ export function Assets() {
     <>
       <PageHeader
         eyebrow="Inventory"
-        title="Assets"
+        title="Asset register"
         actions={
           canManage ? (
             <Link className="btn btn-primary icon-text" to="/assets/new">
-              <Plus size={17} />
-              Add Asset
+              <Plus size={17} aria-hidden="true" />
+              Add asset
             </Link>
           ) : null
         }
-      />
+      >
+        Search, filter, review, and manage every asset in the organization.
+      </PageHeader>
 
       {error ? <div className="alert alert-danger">{error}</div> : null}
 
@@ -143,11 +159,19 @@ export function Assets() {
       <section className="panel">
         <div className="panel-header">
           <div>
-            <span className="eyebrow">{pagination.total} records</span>
+            <span className="eyebrow">
+              Showing {assets.length} of {pagination.total}
+            </span>
             <h2>Asset Register</h2>
           </div>
         </div>
-        <DataTable columns={columns} rows={assets} loading={loading} emptyTitle="No assets match this view" />
+        <DataTable
+          columns={columns}
+          rows={assets}
+          loading={loading}
+          emptyTitle="No assets match this view"
+          label="Asset register"
+        />
         <div className="pagination-bar">
           <span>
             Page {pagination.page} of {pagination.totalPages}
@@ -178,6 +202,7 @@ export function Assets() {
         title="Retire asset"
         message={`${deleteTarget?.asset_code || 'This asset'} will be removed from active inventory.`}
         confirmLabel="Retire"
+        confirming={retiring}
         onCancel={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}
       />

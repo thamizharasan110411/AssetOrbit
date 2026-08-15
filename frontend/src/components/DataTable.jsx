@@ -1,7 +1,7 @@
 import { EmptyState } from './EmptyState.jsx';
 import { LoadingState } from './LoadingState.jsx';
 
-export function DataTable({ columns, rows, loading, emptyTitle = 'No records found' }) {
+export function DataTable({ columns, rows, loading, emptyTitle = 'No records found', label = 'Data table' }) {
   if (loading) {
     return <LoadingState />;
   }
@@ -12,7 +12,7 @@ export function DataTable({ columns, rows, loading, emptyTitle = 'No records fou
 
   return (
     <div className="table-responsive data-table-wrap">
-      <table className="table data-table align-middle">
+      <table className="table data-table align-middle" aria-label={label}>
         <thead>
           <tr>
             {columns.map((column) => (
